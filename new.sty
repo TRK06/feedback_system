@@ -1,0 +1,345 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{tikz}
+\usepackage{subcaption}
+\geometry{a4paper, margin=1in}
+\usetikzlibrary{shapes, arrows, chains, positioning, decorations.pathreplacing, calc}
+
+\title{Stock Price Prediction Using Multi-Company Data: Augmented Data Synthesis and Hybrid Modeling}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This paper presents an integrated framework for stock price prediction using a five-year dataset covering major companies (e.g., AAPL, MSFT, GOOGL, AMZN, NVDA). The methodology combines classical time-series forecasting, deep generative models, and volatility simulation techniques to augment and enrich the dataset. Advanced feature engineering is performed by computing technical indicators and applying a dynamic feature selection process using both SHAP analysis and NSGA-II. A hybrid model—combining deep learning components (LSTM and Transformer) with soft computing (ANFIS using Type-2 fuzzy logic)—is first assembled and then trained/optimized. The final output provides stock price predictions along with uncertainty estimates, offering robust support for decision-making in volatile markets.
+\end{abstract}
+
+\section{Introduction}
+Stock price prediction is challenging due to the complexity and volatility of financial markets. Our framework leverages a multi-company, five-year dataset to:
+
+\begin{itemize}
+    \item Clean, integrate, and synthetically augment data using ARIMA, TimeGAN, and GARCH.
+    \item Engineer features by computing technical indicators and selecting the most predictive subset via SHAP and NSGA-II.
+    \item Assemble a hybrid model that captures short-term (immediate trends) and long-term (seasonal or macroeconomic trends) dependencies.
+    \item Train and optimize the model to yield predictions and associated uncertainty estimates.
+\end{itemize}
+
+This comprehensive approach aims to capture both linear and non-linear behaviors and manage uncertainties inherent in financial data.
+
+\section{Dataset Description}
+The dataset comprises daily records spanning five years for several companies. Each record includes:
+
+\begin{itemize}
+    \item \textbf{Date}: Timestamp.
+    \item \textbf{Open, High, Low, Close}: Daily trading prices.
+    \item \textbf{Volume}: Trading volume.
+    \item \textbf{Dividends and Stock Splits}: Corporate actions.
+    \item \textbf{Company}: Stock ticker (e.g., AAPL, MSFT, GOOGL, AMZN, NVDA).
+\end{itemize}
+
+This dataset supports both company-specific analysis and cross-sectional studies, forming a robust basis for our modeling efforts.
+
+\section{Data Acquisition, Cleaning, and Augmentation}
+
+\subsection{Data Acquisition}
+The dataset is acquired from a reliable financial data source. The specific source could be a financial data provider (e.g., Bloomberg, Refinitiv), or a public source (e.g., Yahoo Finance, Google Finance).
+\subsection{Data Cleaning \& Integration}
+\subsubsection{Data Cleaning}
+Techniques:
+\begin{itemize}
+    \item \textbf{Timestamp Standardization}: All timestamps are converted to a uniform format and timezone. This ensures consistency in time-series analysis.
+    \item \textbf{Missing Value Imputation}: Gaps are filled using forward-fill, backward-fill, and linear interpolation.  The choice of method depends on the nature of the missing data.
+    \item  \textbf{Outlier Detection}: A Z-score threshold ($|Z| > 3$) is applied to identify and remove anomalies.  Other outlier detection methods (e.g., IQR) could also be used.
+    \item \textbf{Price Adjustments}: Raw prices are adjusted for dividends and splits to maintain consistency. This is crucial for accurate long-term analysis.
+\end{itemize}
+
+\subsubsection{Integration Process}
+
+\begin{itemize}
+    \item \textbf{Merging}: Data from different companies are aligned by date. This creates a panel dataset suitable for cross-sectional analysis.
+    \item \textbf{Enrichment}: The cleaned raw data is merged with synthetic sequences from ARIMA and TimeGAN, and volatility measures from a GARCH model, forming a comprehensive dataset.
+\end{itemize}
+
+\subsection{Synthetic Data Generation}
+\subsubsection{ARIMA Forecasting}
+\begin{itemize}
+    \item \textbf{Objective}: Extend historical trends with short-term forecasts.
+    \item \textbf{Method}: For each company, an ARIMA(p,d,q) model is fitted.  The order (p,d,q) is chosen based on the Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) plots. In this case, ARIMA(2,1,2) is used.
+    \item \textbf{Output}: Generate $n$ forecast sequences per company (each covering $m$ days), yielding roughly $n \times$ number of companies synthetic entries. Here, n=10 and m=30.
+\end{itemize}
+
+\subsubsection{TimeGAN Synthesis}
+\begin{itemize}
+    \item \textbf{Objective}: Capture non-linear dynamics beyond ARIMA’s linear forecasts.
+    \item \textbf{Method}: A TimeGAN model is trained on the cleaned data. TimeGAN consists of an embedding network, a generator, and a discriminator.
+    \item \textbf{Output}: Synthesize $k$ distinct sequences per company (each spanning $l$ days). Here, k=5 and l=60.
+\end{itemize}
+
+\subsubsection{Complementarity}
+ARIMA produces interpretable linear forecasts, while TimeGAN enriches the dataset with realistic non-linear variations—together broadening the range of potential market scenarios.
+
+\subsection{Market Volatility Simulation with GARCH}
+\begin{itemize}
+    \item \textbf{Objective}: Estimate future market volatility.
+    \item \textbf{Method}: A GARCH(p,q) model is applied to the residuals of ARIMA forecasts to generate a volatility index. Here GARCH(1,1) is used. The parameters p and q represent the order of the model.
+    \item \textbf{Rationale}: While GARCH provides short-term volatility predictions, its inherent stochasticity necessitates additional synthetic data from ARIMA and TimeGAN to cover broader market conditions. GARCH models the conditional variance.
+\end{itemize}
+
+\subsection{Detailed Output Post-Augmentation}
+Composition:
+\begin{itemize}
+    \item Original Data: $\sim$1,260 daily entries per company ($\sim$6,300 entries for 5 companies).
+    \item Synthetic Augmentation:
+    \begin{itemize}
+        \item ARIMA: $\sim$300 entries per company.
+        \item TimeGAN: $\sim$300 entries per company.
+    \end{itemize}
+    \item Total per Company: $\sim$1,860 entries.
+    \item Overall Dataset: $\sim$9,300 entries.
+\end{itemize}
+
+Features Available:
+\begin{itemize}
+    \item Raw Features: Date, Open, High, Low, Close, Volume, Dividends, Stock Splits, Company.
+    \item Synthetic Forecasts: ARIMA-generated sequences.
+    \item TimeGAN Outputs: Synthesized price sequences.
+    \item Volatility Index: GARCH-based volatility measure.
+    \item Metadata: Flags distinguishing original vs. synthetic data.
+\end{itemize}
+
+\section{Feature Engineering \& Selection}
+\subsection{Technical Indicator Computation}
+The following technical indicators are computed from adjusted price data:
+\begin{itemize}
+    \item \textbf{Relative Strength Index (RSI)}:
+    \begin{itemize}
+        \item \textbf{Calculation}: Over a 14-day window, compute average gains and losses; then, $RSI = 100 - \frac{100}{1 + (\text{Avg Gain} / \text{Avg Loss})}$.
+        \item \textbf{Purpose}: Identifies overbought or oversold conditions; a high RSI may signal an impending price reversal.
+    \end{itemize}
+    \item \textbf{Simple Moving Average (SMA)}:
+    \begin{itemize}
+        \item \textbf{Calculation}: $SMA = \frac{1}{N} \sum_{i=1}^{N} P_i$ (e.g., 20-day period).
+        \item \textbf{Purpose}: Smooths short-term fluctuations to reveal underlying trends.
+    \end{itemize}
+    \item \textbf{Exponential Moving Average (EMA)}:
+    \begin{itemize}
+        \item \textbf{Calculation}: $EMA_t = \alpha P_t + (1 - \alpha) EMA_{t-1}$ with $\alpha = \frac{2}{N+1}$.
+        \item \textbf{Purpose}: Provides a weighted average that emphasizes recent price changes.
+    \end{itemize}
+    \item \textbf{Moving Average Convergence Divergence (MACD)}:
+    \begin{itemize}
+        \item \textbf{Calculation}: Difference between the 12-day EMA and 26-day EMA; a 9-day EMA of MACD serves as a signal line.
+        \item \textbf{Purpose}: Detects momentum shifts and trend reversals.
+    \end{itemize}
+    \item \textbf{Bollinger Bands}:
+    \begin{itemize}
+        \item \textbf{Calculation}: A 20-day SMA with upper/lower bands at $\pm$2 standard deviations.
+        \item \textbf{Purpose}: Indicates volatility; wider bands suggest higher market volatility.
+    \end{itemize}
+    \item  \textbf{Volume Weighted Average Price (VWAP)}:
+    \begin{itemize}
+        \item \textbf{Calculation}: $VWAP = \frac{\sum (P_i \times V_i)}{\sum V_i}$.
+        \item \textbf{Purpose}: Reflects the average price weighted by volume, indicating true market sentiment.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Dynamic Feature Selection}
+Stage 1 – SHAP Analysis:
+\begin{itemize}
+    \item \textbf{Method}:
+    \begin{itemize}
+        \item Compute Shapley values to measure each feature's contribution.
+        \item Rank features by the average absolute Shapley value.
+    \end{itemize}
+    \item \textbf{Outcome}: Preliminary ranking often highlights indicators like RSI, EMA, MACD, and the GARCH volatility index as more predictive.
+\end{itemize}
+Stage 2 – NSGA-II (Genetic Algorithm):
+\begin{itemize}
+    \item \textbf{Method}:
+    \begin{itemize}
+        \item Represent candidate feature subsets as binary vectors.
+        \item Optimize a multi-objective function balancing prediction accuracy and model simplicity.
+        \item Evolve candidate subsets over several generations.
+    \end{itemize}
+    \item \textbf{Outcome}: An optimal feature subset is selected (e.g., $RSI, EMA, MACD, Bollinger Bands, GARCH\_volatility$), providing the best trade-off between predictive power and parsimony.
+\end{itemize}
+Combined Roles: SHAP offers interpretability and a preliminary ranking, while NSGA-II refines this by exploring various combinations to select the most effective feature subset.
+
+\section{Hybrid Model Assembly \& Representation Learning}
+\subsection{Model Architecture Components}
+Deep Learning Modules:
+\begin{itemize}
+    \item \textbf{LSTM Networks}:
+    \begin{itemize}
+        \item \textbf{Role}: Capture short-term temporal dependencies (e.g., the influence of yesterday’s price on today’s price). LSTMs are a type of recurrent neural network (RNN).
+    \end{itemize}
+    \item \textbf{Transformer Encoders}:
+    \begin{itemize}
+        \item \textbf{Role}: Capture long-term dependencies (e.g., seasonal trends or macroeconomic cycles affecting stock prices). Transformers use attention mechanisms.
+    \end{itemize}
+\end{itemize}
+Soft Computing Modules:
+\begin{itemize}
+    \item \textbf{Type-2 Fuzzy Logic}:
+    \begin{itemize}
+        \item \textbf{Role}: Manage uncertainties and noise by allowing fuzzy membership functions to have uncertainty.
+        \item \textbf{Examples}:
+        \begin{itemize}
+            \item Market Uncertainty: Sudden geopolitical events.
+            \item Measurement Noise: Minor inaccuracies in price data.
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+Hybrid Rule Learning via ANFIS:
+\begin{itemize}
+    \item \textbf{Process}:
+    \begin{itemize}
+        \item \textbf{Fuzzification}: Convert crisp inputs (technical indicators) into fuzzy sets.
+        \item \textbf{Rule Layer}: Dynamically learn fuzzy if-then rules (e.g., "If RSI is high and MACD shows a bearish crossover, then expect a price drop").
+        \item \textbf{Defuzzification}: Aggregate fuzzy outputs into a crisp prediction.
+    \end{itemize}
+    \item \textbf{Outcome}: The system learns complex non-linear relationships and outputs an initial prediction along with an uncertainty estimate.
+\end{itemize}
+
+\subsection{Representation Learning} (Step 5 Output)
+\begin{itemize}
+    \item \textbf{Input}: Refined features (e.g., selected technical indicators).
+    \item \textbf{Process}: The hybrid model architecture is assembled; it begins learning internal representations (hidden states in LSTM, attention weights in Transformer, and fuzzy rules in ANFIS) from the input data.
+    \item \textbf{Output}:
+    \begin{itemize}
+        \item An assembled model that has been initialized and has learned preliminary internal representations but is not yet fully optimized.
+        \item \textbf{Example}: The model might internally represent the data as a multi-dimensional vector capturing both short-term trends (from LSTM) and long-term dependencies (from Transformer), with fuzzy rules that indicate the degree of uncertainty.
+    \end{itemize}
+    \item \textbf{Note}: This step does not alter the original data; it only transforms the input into higher-level representations for subsequent training.
+\end{itemize}
+
+\section{Model Training \& Optimization}
+\subsection{Training Process}
+\begin{itemize}
+    \item \textbf{Input}:
+    \begin{itemize}
+        \item The assembled hybrid model from Step 5.
+        \item The enriched and feature-engineered dataset.
+    \end{itemize}
+    \item \textbf{Process}:
+    \begin{itemize}
+        \item \textbf{Neural Architecture Search (NAS)}: Automatically searches for optimal model configurations.
+        \item \textbf{Hyperparameter Tuning}:
+        \begin{itemize}
+            \item Use the Ranger Optimizer (integrating RAdam and LookAhead) and Bayesian Optimization to fine-tune parameters (e.g., learning rate, number of layers, fuzzy rule parameters).
+        \end{itemize}
+        \item \textbf{NSGA-II for Hyperparameter Optimization}: Optimize multiple objectives (e.g., prediction error, model complexity) to find the best hyperparameter configuration.
+    \end{itemize}
+    \item \textbf{Output}: A fully trained model with optimized parameters.
+    \item \textbf{Example}: The final model might predict that on a given day, the stock price will be \$125.30 with a 95\% confidence interval of $\pm\$2.40$.
+\end{itemize}
+
+\subsection{Clarification on Training vs. Assembly}
+\begin{itemize}
+    \item \textbf{Model Assembly} (Step 5): Focuses on integrating components and learning preliminary internal representations.
+    \item \textbf{Model Training} (Step 6): Focuses on fine-tuning the assembled model by adjusting its weights and hyperparameters to minimize prediction error.
+\end{itemize}
+
+\section{Model Evaluation \& Explainability}
+\subsection{Evaluation Metrics}
+\begin{itemize}
+  \item \textbf{Accuracy, Precision, Recall}: Evaluate classification accuracy if predicting directional changes (e.g., up or down).
+  \item \textbf{Error Rates} (e.g., RMSE, MAE): Quantify the deviation between predicted and actual stock prices.  RMSE (Root Mean Squared Error) and MAE (Mean Absolute Error) are common metrics for regression problems.
+  \item \textbf{Confidence Intervals}: Provide uncertainty estimates alongside predictions.
+  \item \textbf{R-squared}:  Measure the proportion of the variance in the dependent variable that is explained by the independent variables.
+\end{itemize}
+
+\subsection{Explainability Techniques}
+\begin{itemize}
+    \item \textbf{SHAP Analysis}: Further interprets how each feature contributes to individual predictions.
+    \item \textbf{Counterfactual Analysis}: Studies the impact of slight variations in input features on predictions.
+    \item \textbf{Uncertainty Quantification}: Uses outputs from the Type-2 fuzzy logic component to generate confidence intervals.
+\end{itemize}
+
+\subsection{Detailed Evaluation Output}
+\begin{itemize}
+    \item \textbf{Predicted Prices}: The final model outputs predicted stock prices for a forecast horizon.
+    \item \textbf{Uncertainty Measures}: Each prediction includes a confidence interval derived from the fuzzy logic system.
+    \item \textbf{Internal Representations}: Intermediate outputs such as LSTM hidden states or fuzzy rule activations can be analyzed to understand decision processes.
+    \item  \textbf{Example Output}: For a given day, the model might output:
+    \begin{itemize}
+        \item Predicted Price: \$125.30
+        \item Uncertainty: $\pm\$2.40$
+        \item Key Contributing Features (via SHAP): RSI, EMA, MACD with respective contributions.
+    \end{itemize}
+    \item \textbf{Note}: The evaluation process does not alter the input data but provides insights into model performance and decision-making.
+\end{itemize}
+
+\section{Conclusion}
+This paper presents a comprehensive, multi-step approach to stock price prediction that integrates:
+\begin{itemize}
+    \item \textbf{Data Augmentation}: Using ARIMA and TimeGAN to extend and diversify historical data.
+    \item \textbf{Feature Engineering}: Computing technical indicators (RSI, SMA, EMA, MACD, Bollinger Bands, VWAP) and selecting the most predictive subset via SHAP and NSGA-II.
+    \item \textbf{Hybrid Modeling}: Assembling a model that combines LSTM and Transformer networks for temporal dependencies with ANFIS using Type-2 fuzzy logic for uncertainty management.
+    \item \textbf{Training \& Optimization}: Employing NAS, Bayesian Optimization, and NSGA-II to produce a fully trained model.
+    \item \textbf{Evaluation \& Explainability}: Delivering predictions with uncertainty estimates and interpretable insights.
+\end{itemize}
+The final output is a robust predictive model that provides stock price forecasts along with confidence intervals. Importantly, while the model transforms the input features into higher-level representations, it does not alter the original data. Future work will explore incorporating additional economic indicators and real-time data feeds to further improve model performance.
+
+\section{Workflow Diagram}
+
+\begin{figure}[ht!]
+    \centering
+    \begin{tikzpicture}[
+        node distance=2cm,
+        >=stealth,
+        box/.style={rectangle, rounded corners, draw=black, fill=white, text width=6cm, text centered, minimum height=1.5cm},
+        process/.style={box, fill=blue!20},
+        decision/.style={diamond, draw=black, fill=green!20, text width=4cm, text centered, minimum height=1.5cm, aspect=1.5},
+        data/.style={ellipse, draw=black, fill=yellow!20, text width=4cm, text centered, minimum height=1cm},
+        arrow/.style={->, thick},
+        ]
+        \node (data_acquisition) [data] {Data Acquisition: Daily stock records for AAPL, MSFT, GOOGL, AMZN, NVDA over 5 years. Features: Date, Open, High, Low, Close, Volume, Dividends, Stock Splits, Company};
+        \node (cleaning) [process, below of=data_acquisition] {Data Cleaning & Integration: Timestamp standardization, missing value imputation, outlier detection, price adjustments, merging data from different companies};
+        \node (augmentation) [process, below of=cleaning] {Synthetic Data Augmentation};
+        \node (arima) [process, below left of=augmentation, xshift=-3cm] {ARIMA Forecasting: Fit ARIMA(2,1,2) model. Generate 10 x 30-day sequences per company. Output: Synthetic short-term price forecasts};
+        \node (timegan) [process, below right of=augmentation, xshift=3cm] {TimeGAN Synthesis: Train TimeGAN. Generate 5 x 60-day sequences per company. Output: Synthetic non-linear price sequences};
+        \node (garch) [process, below of=augmentation] {GARCH Volatility Simulation: Apply GARCH(1,1) to ARIMA residuals. Output: Volatility Index};
+        \node (feature_engineering) [process, below of=garch] {Feature Engineering: Compute technical indicators (RSI, SMA, EMA, MACD, Bollinger Bands, VWAP) from adjusted price data.};
+        \node (feature_selection) [process, below of=feature_engineering] {Dynamic Feature Selection};
+        \node (shap) [process, below left of=feature_selection, xshift=-3cm] {SHAP Analysis: Compute Shapley values. Rank features by importance. Output: Feature ranking};
+        \node (nsga2) [process, below right of=feature_selection, xshift=3cm] {NSGA-II: Optimize feature subset for accuracy and simplicity. Output: Optimal feature subset};
+        \node (model_assembly) [process, below of=feature_selection] {Hybrid Model Assembly: Integrate LSTM, Transformer, and ANFIS with Type-2 fuzzy logic. Output: Assembled hybrid model};
+        \node (training) [process, below of=model_assembly] {Model Training & Optimization: Use NAS, Ranger Optimizer, Bayesian Optimization, and NSGA-II. Output: Trained and optimized model};
+        \node (evaluation) [process, below of=training] {Model Evaluation & Explainability: Evaluate using error rates, R-squared, and confidence intervals.  Explain using SHAP and counterfactual analysis.};
+        \node (output) [data, below of=evaluation] {Output: Stock price predictions with uncertainty estimates and feature importance.};
+
+        \draw[arrow] (data_acquisition) -- (cleaning);
+        \draw[arrow] (cleaning) -- (augmentation);
+        \draw[arrow] (augmentation) -- (arima);
+        \draw[arrow] (augmentation) -- (timegan);
+        \draw[arrow] (augmentation) -- (garch);
+        \draw[arrow] (arima) -- (feature_engineering);
+        \draw[arrow] (timegan) -- (feature_engineering);
+        \draw[arrow] (garch) -- (feature_engineering);
+        \draw[arrow] (feature_engineering) -- (feature_selection);
+        \draw[arrow] (feature_selection) -- (shap);
+        \draw[arrow] (feature_selection) -- (nsga2);
+        \draw[arrow] (shap) -- (model_assembly);
+        \draw[arrow] (nsga2) -- (model_assembly);
+        \draw[arrow] (model_assembly) -- (training);
+        \draw[arrow] (training) -- (evaluation);
+        \draw[arrow] (evaluation) -- (output);
+
+    \end{tikzpicture}
+    \caption{Workflow Diagram for Stock Price Prediction Using Multi-Company Data}
+    \label{fig:workflow_diagram}
+\end{figure}
+
+
+\section{References}
+(References would include key literature on ARIMA, TimeGAN, GARCH, LSTM, Transformer, Type-2 Fuzzy Logic, ANFIS, SHAP, and NSGA-II, updated as necessary.)
+
+\end{document}
